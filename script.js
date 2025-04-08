@@ -5,6 +5,7 @@ const display = document.getElementById("display");
 let operator;
 let numberOne;
 let numberTwo;
+let calculationComplete = false;
 
 const add = function (a, b) {
   console.log(a, b);
@@ -31,82 +32,181 @@ const operate = function (numberOne, operator, numberTwo) {
   if (operator === "/") return divide(numberOne, numberTwo);
 };
 
-buttons.addEventListener("click", (e) => {
-  if (
-    Number.isInteger(+e.target.value) &&
-    display.textContent.length < 8 &&
-    !operator
-  ) {
-    if (display.textContent[0] === "0")
+function formatResult(result) {
+  if (!isFinite(result) || isNaN(result)) {
+    return result === Infinity
+      ? "Overflow"
+      : result === -Infinity
+      ? "-Overflow"
+      : "Error";
+  }
+
+  const resultStr = result.toString();
+
+  if (resultStr.length <= 8) {
+    return result;
+  }
+
+  const wholePart = resultStr.split(".")[0];
+  const isNegative = wholePart.startsWith("-");
+  const wholeDigits = isNegative ? wholePart.length - 1 : wholePart.length;
+
+  if (wholeDigits >= 8) {
+    return result.toExponential(2);
+  }
+
+  const availableDecimals = 8 - wholePart.length - 1;
+  return Number(result).toFixed(availableDecimals);
+}
+
+function handleDigit(digit) {
+  if (display.textContent.length >= 9) return;
+
+  if (!operator) {
+    if (calculationComplete) {
+      display.textContent = "";
+      calculationComplete = false;
+      numberOne = null;
+    }
+
+    if (display.textContent[0] === "0" && display.textContent[1] !== ".")
       display.textContent = display.textContent.substring(1);
-    display.textContent += e.target.value;
-  }
 
-  if (
-    !operator &&
-    (e.target.value === "+" ||
-      e.target.value === "/" ||
-      e.target.value === "-" ||
-      e.target.value === "*")
-  ) {
-    numberOne = display.textContent;
-    operator = e.target.value;
-    console.log(numberOne, operator);
-  }
-
-  if (
-    Number.isInteger(+e.target.value) &&
-    numberOne &&
-    operator &&
-    display.textContent.length < 8
-  ) {
+    display.textContent += digit;
+  } else {
     if (!numberTwo) {
       display.textContent = "";
     }
-    display.textContent += e.target.value;
 
+    display.textContent += digit;
     numberTwo = display.textContent;
-    console.log(numberTwo);
   }
+}
 
-  if (numberOne && operator && numberTwo && e.target.value === "=") {
-    display.textContent = operate(numberOne, operator, numberTwo);
-    console.log(operate(numberOne, operator, numberTwo));
+function handleDecimalPoint() {
+  if (display.textContent.length >= 9 || display.textContent.includes("."))
+    return;
 
-    numberOne = display.textContent;
-    operator = null;
-    numberTwo = null;
-  }
-
-  if (
-    numberOne &&
-    operator &&
-    numberTwo &&
-    (e.target.value === "-" ||
-      e.target.value === "+" ||
-      e.target.value === "*" ||
-      e.target.value === "/")
-  ) {
-    display.textContent = operate(numberOne, operator, numberTwo);
-    console.log(operate(numberOne, operator, numberTwo));
-
-    numberOne = display.textContent;
-    operator = e.target.value;
-    numberTwo = null;
-  }
-
-  if (e.target.value === "sign") {
-    display.textContent = -display.textContent;
-  }
-
-  if (e.target.value === "clear") {
+  if (calculationComplete) {
+    display.textContent = "0";
+    calculationComplete = false;
     numberOne = null;
-    operator = null;
-    numberTwo = null;
-    display.textContent = 0;
   }
 
-  if (e.target.value === "percent") {
-    display.textContent = display.textContent / 100;
+  display.textContent += ".";
+}
+
+function handleOperator(op) {
+  if (!operator) {
+    numberOne = display.textContent;
+    operator = op;
+  } else if (!numberTwo) {
+    operator = op;
+  } else {
+    const result =
+      numberTwo === "0" && operator === "/"
+        ? "Stupid?"
+        : formatResult(operate(numberOne, operator, numberTwo));
+
+    display.textContent = result;
+    numberOne = display.textContent;
+    operator = op;
+    numberTwo = null;
+    calculationComplete = true;
+  }
+}
+
+function handleEquals() {
+  if (!numberOne || !operator || !numberTwo) return;
+
+  display.textContent =
+    numberTwo === "0" && operator === "/"
+      ? "Stupid?"
+      : formatResult(operate(numberOne, operator, numberTwo));
+
+  numberOne = display.textContent;
+  operator = null;
+  numberTwo = null;
+  calculationComplete = true;
+}
+
+function handleClear() {
+  numberOne = null;
+  operator = null;
+  numberTwo = null;
+  display.textContent = "0";
+}
+
+function handleSign() {
+  display.textContent = -display.textContent;
+}
+
+function handlePercent() {
+  display.textContent = display.textContent / 100;
+}
+
+buttons.addEventListener("click", (e) => {
+  const value = e.target.value;
+
+  if (Number.isInteger(+value)) {
+    handleDigit(value);
+  } else if (value === ".") {
+    handleDecimalPoint();
+  } else if (["+", "-", "*", "/"].includes(value)) {
+    handleOperator(value);
+  } else if (value === "=") {
+    handleEquals();
+  } else if (value === "clear") {
+    handleClear();
+  } else if (value === "sign") {
+    handleSign();
+  } else if (value === "percent") {
+    handlePercent();
   }
 });
+
+document.addEventListener("keydown", (e) => {
+  if (["+", "-", "*", "/", "=", "Enter"].includes(e.key)) {
+    e.preventDefault();
+  }
+
+  if (e.key >= "0" && e.key <= "9") {
+    handleDigit(e.key);
+  } else if (e.key === ".") {
+    handleDecimalPoint();
+  } else if (["+", "-", "*", "/"].includes(e.key)) {
+    handleOperator(e.key);
+  } else if (e.key === "Enter" || e.key === "=") {
+    handleEquals();
+  } else if (
+    e.key === "Escape" ||
+    e.key === "Delete" ||
+    e.key === "c" ||
+    e.key === "C"
+  ) {
+    handleClear();
+  } else if (e.key === "%") {
+    handlePercent();
+  } else if (e.key === "Backspace") {
+    handleBackspace();
+  } else if (e.key === "F9" || e.key === "s" || e.key === "S") {
+    handleSign();
+  }
+});
+
+function handleBackspace() {
+  if (calculationComplete) return;
+
+  if (display.textContent.length > 1) {
+    display.textContent = display.textContent.slice(0, -1);
+  } else {
+    display.textContent = "0";
+  }
+
+  if (operator && numberTwo) {
+    numberTwo = display.textContent;
+    if (display.textContent === "0" || display.textContent === "") {
+      numberTwo = null;
+    }
+  }
+}
